@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T-Test Simulator</title>
+    
+    <!-- Switched to jStat for more robust statistical functions -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #111827;
+            --bg-med: #1F2937;
+            --bg-light: #374151;
+            --text-light: #F9FAFB;
+            --text-med: #D1D5DB;
+            --accent: #38BDF8;
+            --accent-dark: #0ea5e9;
+            --green: #34D399;
+            --yellow: #FBBF24;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            background-color: var(--bg-med);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+        }
+
+        header {
+            text-align: center;
+            border-bottom: 1px solid var(--bg-light);
+            padding-bottom: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        header h1 { font-size: 2.25rem; margin: 0; }
+        header p { color: var(--text-med); margin-top: 0.5rem; }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 1024px) { .main-grid { grid-template-columns: 1fr 2fr; } }
+
+        .controls {
+            background-color: rgba(17, 24, 39, 0.5);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .controls h2 { font-size: 1.25rem; color: var(--accent); text-align: center; margin: 0 0 1rem 0; }
+        .control-group h3 { margin: 0 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid var(--bg-light); }
+        .slider-label { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; color: var(--text-med); margin-bottom: 0.5rem; }
+        .slider-value { font-family: monospace; color: var(--accent); font-weight: bold; }
+        
+        input[type="range"] { -webkit-appearance: none; width: 100%; height: 8px; background: var(--bg-light); border-radius: 5px; outline: none; cursor: pointer; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: var(--accent); border-radius: 50%; border: 2px solid var(--bg-dark); }
+        input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; background: var(--accent); border-radius: 50%; border: 2px solid var(--bg-dark); }
+
+        .run-button { width: 100%; background-color: var(--accent); color: var(--bg-dark); font-weight: bold; font-size: 1.1rem; padding: 0.8rem 1rem; border: none; border-radius: 0.5rem; cursor: pointer; transition: background-color 0.3s, transform 0.2s; }
+        .run-button:hover { background-color: var(--accent-dark); transform: scale(1.02); }
+
+        .results-panel { display: flex; flex-direction: column; gap: 1.5rem; }
+        .placeholder { display: flex; justify-content: center; align-items: center; height: 100%; min-height: 400px; background-color: rgba(17, 24, 39, 0.5); border-radius: 1rem; text-align: center; color: var(--text-med); }
+        .results-summary { padding: 1rem; border-radius: 1rem; text-align: center; }
+        .results-summary.significant { background-color: rgba(52, 211, 153, 0.1); color: var(--green); }
+        .results-summary.not-significant { background-color: rgba(251, 191, 36, 0.1); color: var(--yellow); }
+        .results-summary h3 { font-size: 1.5rem; margin: 0; }
+        .results-summary p { margin: 0.5rem 0 0 0; }
+        
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; }
+        .stat-box { background-color: var(--bg-light); padding: 1rem; border-radius: 1rem; text-align: center; }
+        .stat-box h4 { margin: 0 0 0.5rem 0; color: var(--text-med); font-weight: normal; }
+        .stat-box p { font-size: 2rem; font-family: monospace; color: var(--accent); margin: 0; }
+        
+        .chart-container { background-color: rgba(17, 24, 39, 0.5); padding: 1.5rem; border-radius: 1rem; }
+        .chart-container h3 { text-align: center; margin: 0 0 1rem 0; color: var(--text-med); }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Interactive T-Test Simulator</h1>
+            <p>Visualize how sample size, mean, and standard deviation impact statistical significance.</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- CONTROLS -->
+            <div class="controls">
+                <h2>Distribution Parameters</h2>
+                <div class="control-group">
+                    <h3>Group A</h3>
+                    <div class="slider-container">
+                        <label class="slider-label"><span>Sample Size (N)</span><span id="sampleSizeA-value" class="slider-value">50</span></label>
+                        <input type="range" id="sampleSizeA" min="5" max="500" step="5" value="50">
+                    </div>
+                    <div class="slider-container">
+                        <label class="slider-label"><span>Mean (μ)</span><span id="meanA-value" class="slider-value">100</span></label>
+                        <input type="range" id="meanA" min="50" max="150" step="1" value="100">
+                    </div>
+                    <div class="slider-container">
+                        <label class="slider-label"><span>Std Dev (σ)</span><span id="stdDevA-value" class="slider-value">15</span></label>
+                        <input type="range" id="stdDevA" min="1" max="50" step="1" value="15">
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>Group B</h3>
+                    <div class="slider-container">
+                        <label class="slider-label"><span>Sample Size (N)</span><span id="sampleSizeB-value" class="slider-value">50</span></label>
+                        <input type="range" id="sampleSizeB" min="5" max="500" step="5" value="50">
+                    </div>
+                    <div class="slider-container">
+                        <label class="slider-label"><span>Mean (μ)</span><span id="meanB-value" class="slider-value">105</span></label>
+                        <input type="range" id="meanB" min="50" max="150" step="1" value="105">
+                    </div>
+                    <div class="slider-container">
+                        <label class="slider-label"><span>Std Dev (σ)</span><span id="stdDevB-value" class="slider-value">15</span></label>
+                        <input type="range" id="stdDevB" min="1" max="50" step="1" value="15">
+                    </div>
+                </div>
+                
+                 <div class="control-group">
+                    <h3>Test Settings</h3>
+                    <div class="slider-container">
+                        <label class="slider-label"><span>Alpha (α)</span><span id="alpha-value" class="slider-value">0.05</span></label>
+                        <input type="range" id="alpha" min="0.001" max="0.2" step="0.001" value="0.05">
+                    </div>
+                </div>
+
+                <button id="runButton" class="run-button">Run Calculation</button>
+            </div>
+
+            <!-- RESULTS -->
+            <div id="resultsPanel" class="results-panel">
+                <div id="placeholder" class="placeholder">
+                    <div>
+                        <h2>Run a calculation to see the results.</h2>
+                        <p>Adjust the parameters on the left and click the button.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- UTILITY FUNCTIONS ---
+        function normalPDF(x, mean, stdDev) {
+            if (stdDev <= 0) return 0;
+            return jStat.normal.pdf(x, mean, stdDev);
+        }
+        
+        // --- DOM ELEMENTS & STATE ---
+        const controls = {
+            sampleSizeA: document.getElementById('sampleSizeA'), meanA: document.getElementById('meanA'), stdDevA: document.getElementById('stdDevA'),
+            sampleSizeB: document.getElementById('sampleSizeB'), meanB: document.getElementById('meanB'), stdDevB: document.getElementById('stdDevB'),
+            alpha: document.getElementById('alpha'), runButton: document.getElementById('runButton')
+        };
+        const valueDisplays = {
+            sampleSizeA: document.getElementById('sampleSizeA-value'), meanA: document.getElementById('meanA-value'), stdDevA: document.getElementById('stdDevA-value'),
+            sampleSizeB: document.getElementById('sampleSizeB-value'), meanB: document.getElementById('meanB-value'), stdDevB: document.getElementById('stdDevB-value'),
+            alpha: document.getElementById('alpha-value')
+        };
+        const resultsPanel = document.getElementById('resultsPanel');
+        let distributionChart = null; // To hold the Chart.js instance
+
+        // --- EVENT LISTENERS ---
+        Object.keys(controls).forEach(key => {
+            if (valueDisplays[key]) {
+                controls[key].addEventListener('input', (e) => {
+                    valueDisplays[key].textContent = e.target.value;
+                    runCalculation();
+                });
+            }
+        });
+        controls.runButton.addEventListener('click', runCalculation);
+        window.addEventListener('load', runCalculation);
+
+        // --- CALCULATION & DISPLAY LOGIC ---
+        function runCalculation() {
+            const params = {
+                sampleSizeA: Number(controls.sampleSizeA.value), meanA: Number(controls.meanA.value), stdDevA: Number(controls.stdDevA.value),
+                sampleSizeB: Number(controls.sampleSizeB.value), meanB: Number(controls.meanB.value), stdDevB: Number(controls.stdDevB.value),
+                alpha: Number(controls.alpha.value),
+            };
+
+            const varianceA = params.stdDevA ** 2;
+            const varianceB = params.stdDevB ** 2;
+            
+            if (params.sampleSizeA <= 1 || params.sampleSizeB <= 1) return;
+
+            const tStat = (params.meanA - params.meanB) / Math.sqrt((varianceA / params.sampleSizeA) + (varianceB / params.sampleSizeB));
+            
+            // --- CORRECT P-VALUE CALCULATION ---
+            // 1. Calculate degrees of freedom (df) using the Welch-Satterthwaite equation.
+            const v1 = varianceA / params.sampleSizeA;
+            const v2 = varianceB / params.sampleSizeB;
+            const df = (v1 + v2) ** 2 / ((v1 ** 2 / (params.sampleSizeA - 1)) + (v2 ** 2 / (params.sampleSizeB - 1)));
+
+            // 2. Calculate the p-value using the t-distribution's cumulative distribution function (CDF) from the jStat library.
+            // This is the probability of getting a result as extreme as the t-statistic.
+            const pValue = 2 * (1 - jStat.studentt.cdf(Math.abs(tStat), df));
+            
+            const isSignificant = pValue < params.alpha;
+
+            displayResults({ tStat, df, pValue, isSignificant, alpha: params.alpha });
+            displayChart(params);
+        }
+        
+        function displayResults({ tStat, df, pValue, isSignificant, alpha }) {
+            const significanceClass = isSignificant ? 'significant' : 'not-significant';
+            const significanceText = isSignificant ? 'Result is Statistically Significant' : 'Result is Not Statistically Significant';
+            const significanceExplanation = isSignificant 
+                ? `The p-value (${pValue.toFixed(4)}) is less than alpha (${alpha}), so we reject the null hypothesis.`
+                : `The p-value (${pValue.toFixed(4)}) is not less than alpha (${alpha}), so we fail to reject the null hypothesis.`;
+
+            resultsPanel.innerHTML = `
+                <div class="results-summary ${significanceClass}"><h3>${significanceText}</h3><p>${significanceExplanation}</p></div>
+                <div class="stats-grid">
+                    <div class="stat-box"><h4>T-Statistic</h4><p>${tStat.toFixed(4)}</p></div>
+                    <div class="stat-box"><h4>df</h4><p>${df.toFixed(2)}</p></div>
+                    <div class="stat-box"><h4>P-Value</h4><p>${pValue.toFixed(4)}</p></div>
+                </div>
+                <div class="chart-container"><h3>Theoretical Distributions</h3><canvas id="distributionChartCanvas"></canvas></div>
+            `;
+        }
+
+        function displayChart(params) {
+            const minX = Math.min(params.meanA - 4 * params.stdDevA, params.meanB - 4 * params.stdDevB);
+            const maxX = Math.max(params.meanA + 4 * params.stdDevA, params.meanB + 4 * params.stdDevB);
+            
+            const labels = [];
+            const dataA = [];
+            const dataB = [];
+            const step = (maxX - minX) / 200;
+
+            for (let x = minX; x <= maxX; x += step) {
+                labels.push(x.toFixed(1));
+                dataA.push(normalPDF(x, params.meanA, params.stdDevA));
+                dataB.push(normalPDF(x, params.meanB, params.stdDevB));
+            }
+            
+            const chartData = {
+                labels: labels,
+                datasets: [
+                    { label: 'Group A', data: dataA, fill: true, backgroundColor: 'rgba(56, 189, 248, 0.4)', borderColor: 'rgba(56, 189, 248, 1)', borderWidth: 2, pointRadius: 0, tension: 0.4 },
+                    { label: 'Group B', data: dataB, fill: true, backgroundColor: 'rgba(52, 211, 153, 0.4)', borderColor: 'rgba(52, 211, 153, 1)', borderWidth: 2, pointRadius: 0, tension: 0.4 }
+                ]
+            };
+            const ctx = document.getElementById('distributionChartCanvas').getContext('2d');
+            if (distributionChart) { distributionChart.destroy(); }
+
+            distributionChart = new Chart(ctx, {
+                type: 'line',
+                data: chartData,
+                options: {
+                    scales: {
+                        x: { grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: 'var(--text-light)', font: { size: 14 } } },
+                        y: { grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: 'var(--text-light)', font: { size: 14 } } }
+                    },
+                    plugins: {
+                        legend: { labels: { color: 'var(--text-light)', font: { size: 14 } } },
+                        tooltip: { backgroundColor: 'var(--bg-dark)', titleColor: 'var(--text-light)', bodyColor: 'var(--text-med)'}
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
